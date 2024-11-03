@@ -14,7 +14,6 @@ router = APIRouter()
 processor = AutoProcessor.from_pretrained("suno/bark")
 model = BarkModel.from_pretrained("suno/bark")
 
-
 class AudioRequest(BaseModel):
 	text_prompt: str
 	language: str
@@ -22,16 +21,14 @@ class AudioRequest(BaseModel):
 
 @router.post("/generate-audio")
 async def generate_audio(request: AudioRequest):
-	print(request)
-
 	# Extract values from the request
 	text_prompt = request.text_prompt
 	language = request.language
-	voice_name = request.voice_name  # Now this represents the friendly name
+	voice_name = request.voice_name
 
-	# Check if any parameter is missing or empty
+	# Validate input parameters
 	if not text_prompt or not language or not voice_name:
-		raise HTTPException(status_code=400, detail="Missing or invalid parameters: 'text_prompt', 'language', and 'voice_preset' are required.")
+		raise HTTPException(status_code=400, detail="Missing or invalid parameters: 'text_prompt', 'language', and 'voice_name' are required.")
 
 	# Validate language and voice name
 	if language not in AVAILABLE_VOICES:
@@ -42,9 +39,17 @@ async def generate_audio(request: AudioRequest):
 	# Convert voice name to preset ID using VOICE_NAME_MAP
 	voice_preset = VOICE_NAME_MAP[voice_name]
 
-	# Process and generate audio
-	inputs = processor(text_prompt, voice_preset=voice_preset)
-	audio_array = model.generate(**inputs)
+	# Process the input text
+	inputs = processor(text_prompt, voice_preset=voice_preset, return_tensors="pt")
+
+	# Generate audio with attention mask and pad token id
+	attention_mask = inputs.get("attention_mask")
+	pad_token_id = processor.tokenizer.pad_token_id
+	audio_array = model.generate(
+		input_ids=inputs["input_ids"],
+		attention_mask=attention_mask,
+		pad_token_id=pad_token_id
+	)
 
 	# Convert to numpy and ensure it's in the right format
 	audio_array = audio_array.cpu().numpy().squeeze()
@@ -60,13 +65,11 @@ async def generate_audio(request: AudioRequest):
 		"Content-Disposition": f"attachment; filename={voice_name}.wav"
 	}
 
-	return StreamingResponse(wav_buffer, media_type="audio/wav")
-
+	return StreamingResponse(wav_buffer, media_type="audio/wav", headers=headers)
 
 @router.get("/available-voices")
 async def get_available_voices():
 	return AVAILABLE_VOICES
-
 
 # Define available voices with friendly names
 AVAILABLE_VOICES = {

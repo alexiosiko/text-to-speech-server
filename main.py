@@ -22,5 +22,6 @@ def test():
 # Include the text-to-speech router
 app.include_router(text_to_speech_router)
 
-# Run app with uvicorn if needed for local testing
-# uvicorn main:app --host 0.0.0.0 --port 8000
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
